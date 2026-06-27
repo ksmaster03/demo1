@@ -1,0 +1,7 @@
+{
+  "Name": "demo1-oac",
+  "Description": "OAC for Demo1 static site",
+  "SigningProtocol": "sigv4",
+  "SigningBehavior": "always",
+  "OriginAccessControlOriginType": "s3"
+}
