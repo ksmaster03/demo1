@@ -1,0 +1,52 @@
+# Claude Code Weekend — prod stack: Next app (web) + PostgreSQL (db) + Cloudflare Tunnel
+# ค่า secret มาจาก .env บนเครื่อง (ไม่ commit) — ดู .env.example
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-ccw}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-ccw}
+    volumes:
+      - ccw_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ccw}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  web:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL:?set in .env}
+      AUTH_SECRET: ${AUTH_SECRET:?set in .env}
+      AUTH_GOOGLE_ID: ${AUTH_GOOGLE_ID:?set in .env}
+      AUTH_GOOGLE_SECRET: ${AUTH_GOOGLE_SECRET:?set in .env}
+      AUTH_LINE_ID: ${AUTH_LINE_ID:?set in .env}
+      AUTH_LINE_SECRET: ${AUTH_LINE_SECRET:?set in .env}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:?set in .env}
+      NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY:?set in .env}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:?set in .env}
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-https://demo1.toptierdigital.space}
+    expose:
+      - "3000" # ภายใน compose network เท่านั้น — Cloudflare Tunnel จัดการ TLS
+
+  # Cloudflare Tunnel — ส่ง demo1.toptierdigital.space → http://web:3000
+  # ตั้ง Public Hostname + token ใน Cloudflare Zero Trust
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:?set in .env}
+    depends_on:
+      - web
+
+volumes:
+  ccw_pgdata:

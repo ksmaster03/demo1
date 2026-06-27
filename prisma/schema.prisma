@@ -1,0 +1,113 @@
+// Claude Code Weekend — Prisma schema
+// Auth.js v5 adapter models + Booking + Payment
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ── Auth.js v5 adapter models ──────────────────────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  // custom fields
+  role          String    @default("student") // student | coach | admin
+  phone         String?
+  accounts      Account[]
+  sessions      Session[]
+  bookings      Booking[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ── Booking ───────────────────────────────────────────────────────────────
+
+model Booking {
+  id              String    @id @default(cuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  startsAt        DateTime
+  durationMin     Int       @default(60)
+  // pending_payment | confirmed | cancelled | completed
+  status          String    @default("pending_payment")
+  priceTHB        Int       @default(1000)
+  focusNote       String?
+  stripeSessionId String?
+  payment         Payment?
+  createdAt       DateTime  @default(now())
+
+  @@index([startsAt])
+  @@index([userId])
+}
+
+// ── Payment ───────────────────────────────────────────────────────────────
+
+model Payment {
+  id              String   @id @default(cuid())
+  bookingId       String   @unique
+  booking         Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  stripeSessionId String   @unique
+  amountTHB       Int
+  status          String   // paid | failed | refunded
+  createdAt       DateTime @default(now())
+}
+
+// ── BlockedSlot ───────────────────────────────────────────────────────────
+// Coach/admin can block whole days or specific time slots on weekends
+// startTime = null → whole day blocked; "09:00" → that slot blocked only
+
+model BlockedSlot {
+  id        String   @id @default(cuid())
+  date      DateTime @db.Date // the calendar date (midnight UTC)
+  startTime String?  // "09:00" | "10:00" … null = whole day
+  reason    String?
+  createdAt DateTime @default(now())
+
+  @@index([date])
+}
